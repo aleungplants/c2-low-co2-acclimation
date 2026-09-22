@@ -1,0 +1,17 @@
+Framework,Model,nPar,AIC,dAIC,Finite
+OLS_primary,lin_noint,2,190.62,0.22,TRUE
+OLS_primary,quad_noint,3,190.41,0,TRUE
+OLS_primary,lin_int,4,193.43,3.02,TRUE
+OLS_primary,quad_int,6,193.8,3.39,TRUE
+PGLS_secondary,BM_lin_noint,2,-570.92,3.14,TRUE
+PGLS_secondary,BM_quad_noint,3,-574.06,0,TRUE
+PGLS_secondary,BM_lin_int,4,-567.71,6.36,TRUE
+PGLS_secondary,BM_quad_int,6,-571.62,2.44,TRUE
+PGLS_secondary,OU_lin_noint,2,181.92,755.99,TRUE
+PGLS_secondary,OU_quad_noint,3,180.2,754.26,TRUE
+PGLS_secondary,OU_lin_int,4,183.44,757.5,TRUE
+PGLS_secondary,OU_quad_int,6,181.79,755.86,TRUE
+PGLS_secondary,Lambda_lin_noint,2,181.44,755.51,TRUE
+PGLS_secondary,Lambda_quad_noint,3,180.17,754.23,TRUE
+PGLS_secondary,Lambda_lin_int,4,183.17,757.23,TRUE
+PGLS_secondary,Lambda_quad_int,6,181.73,755.8,TRUE

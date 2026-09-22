@@ -1,0 +1,5 @@
+Framework,Model,AIC
+PLME_pglmm,Linear,172.19
+PLME_pglmm,Quadratic,173
+LME,LME_Linear,622.51
+LME,LME_Quadratic,624.41

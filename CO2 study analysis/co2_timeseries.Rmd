@@ -1,0 +1,537 @@
+---
+title: "co2_timeseries"
+author: "Arthur Leung"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+
+here::i_am("co2_timeseries.Rmd")
+
+theme_set(cowplot::theme_half_open() +
+            theme(legend.spacing.x = unit(3, "mm"),
+                  strip.background = element_blank(),
+                  panel.spacing = unit(5, "mm")))
+
+```
+
+## A-Ci curves
+
+```{r aci}
+aci_data <- readr::read_csv(here::here("data", "gas_ex", "merged_timeseries_corrected.csv")) %>%
+  mutate(PARi = as.factor(PARi))
+cstar_aci_filter <- tibble::tibble(Plant = 2, Day = 2, Obs = 52) # Outlier removal
+
+cstar_aci_data <- readr::read_csv(here::here("data", "gas_ex", "merged_timeseries_cstar.csv")) %>%
+  mutate(PARi = as.factor(PARi))
+
+# Summary for plotting
+cstar_aci_plot_data <- cstar_aci_data %>%
+  anti_join(cstar_aci_filter) %>% 
+  group_by(Day, Plant, PARi, Obs) %>%
+  summarise(across(.cols = c("Photo", "Ci"), .fns = mean)) %>%
+  group_by(Day, PARi, Obs) %>%
+  summarise(across(.cols = c("Photo", "Ci"),
+                   .fns = list(Mean = mean,
+                               SE = ~sd(.)/sqrt(length(n())))))
+
+# Plot
+cstar_aci_plot <- ggplot(cstar_aci_plot_data %>%
+                           mutate(Day = paste("Day", Day)),
+                         aes(x = Ci_Mean, y = Photo_Mean, fill = as.factor(PARi))) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.25, color = "black") +
+  
+  # Linear fits
+  geom_smooth(aes(group = PARi),
+              color = "black",
+              method = "lm", 
+              se = FALSE, 
+              fullrange = TRUE, 
+              linewidth = 0.25) +
+  
+  # Error bars
+  geom_errorbar(aes(xmin = Ci_Mean - Ci_SE, xmax = Ci_Mean + Ci_SE),
+                linewidth = 0.25) +
+  geom_errorbar(aes(ymin = Photo_Mean - Photo_SE, ymax = Photo_Mean + Photo_SE),
+                linewidth = 0.25) +
+  
+  # Points
+  geom_point(shape = 21) +
+  
+  # Scales matched to reference
+  scale_fill_manual(values = c("#3B528B", "#6C7DA8", "#9DA9C5", "#CED4E2", "#FFFFFF"),
+                    name = expression(PPFD~"("*µmol~m^-2~s^-1*")")) +
+  scale_x_continuous(limits = c(0, NA), breaks = seq(0, 150, 30), expand = expansion()) +
+  scale_y_continuous(limits = c(-4, 6), breaks = seq(-4, 8, 2), expand = expansion()) +
+  
+  # Axis labels matched to reference
+  xlab(bquote(italic(C[i])~"("*µmol~mol^-1*")")) +
+  ylab(bquote(italic(A)~"("*µmol~m^-2~s^-1*")")) +
+  
+  facet_wrap(~ Day)
+
+cstar_aci_plot
+ggsave(here::here("figures/timeseries/timeseries_aci.svg"), cstar_aci_plot, width = 7, height = 3, bg = "white", dpi = 500)
+
+# Replicate plot
+cstar_aci_rep_data <- cstar_aci_data %>%
+  anti_join(cstar_aci_filter) %>%
+  mutate(Plant = as.numeric(Plant), PARi = as.factor(PARi)) %>%
+  group_by(Day, Plant, PARi, Obs) %>%
+  summarise(across(.cols = c("Photo", "Ci"), .fns = mean))
+
+cstar_aci_rep_plot <- cstar_aci_rep_data %>%
+  ggplot(aes(x = Ci, y = Photo, fill = PARi)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.25, color = "black") +
+  geom_smooth(aes(group = PARi), data = cstar_aci_rep_data,
+              color = "black", method = "lm", se = FALSE, fullrange = TRUE, linewidth = 0.25) +
+  geom_point(shape = 21) +
+  scale_fill_manual(values = c("black","grey20","grey40","grey70","white")) +
+  scale_x_continuous(limits = c(0, NA), breaks = seq(0, 150, 30)) +
+  scale_y_continuous(limits = c(-3, 7), breaks = seq(-4, 8, 2)) +
+  xlab(bquote(italic(C[i])~"("*µmol~mol^-1*")")) +
+  ylab(bquote(italic(A)~"("*µmol~m^-2~s^-1*")")) +
+  # cowplot::panel_border(size = 0.5, color = "black") +
+  lemon::facet_rep_grid(Day ~ Plant)
+
+ggsave(here::here("figures/timeseries/timeseries_slope_rep.pdf"), cstar_aci_rep_plot, width = 6, height = 6)
+```
+
+## Slope-intercept
+
+
+```{r slopes}
+cstar_aci_data <- readr::read_csv(here::here("data", "gas_ex", "merged_timeseries_cstar.csv")) %>%
+  mutate(across(.cols = c(Plant, Day)))
+
+# Calculate Slopes and Intercepts
+slope_data <- cstar_aci_data %>%
+  group_by(Day, Plant, PARi, Obs) %>%
+  summarise(across(.cols = c("Photo", "Ci"), .fns = mean)) %>%
+  group_by(Day, Plant, PARi) %>%
+  do(lm = broom::tidy(lm(Photo ~ Ci, data = .))) %>% 
+  tidyr::unnest(lm) %>%
+  mutate(term = stringr::str_replace(term, stringr::regex("[:punct:]Intercept[:punct:]"), "Intercept")) %>%
+  mutate(term = stringr::str_replace(term, "Ci", "Slope")) %>%
+  select(!c(std.error, statistic, p.value)) %>% 
+  tidyr::pivot_wider(names_from = "term", values_from = "estimate") 
+
+gamma_data <- slope_data %>%
+  filter(PARi %in% c(250, 1500)) %>%
+  mutate(Gamma = -Intercept/Slope, .keep = "unused") %>%
+  tidyr::pivot_wider(names_from = "PARi",
+                     names_prefix = "Gamma",
+                     values_from = "Gamma") %>%
+  rename(Gamma = Gamma1500,
+         GammaLowLight = Gamma250)
+
+filtered_slope_data <- slope_data %>%
+  filter(!PARi %in% c(400, 1500))
+
+# Calculate C* (Cstar)
+cstars <- filtered_slope_data %>%
+  group_by(Day, Plant) %>%
+  do(lm = broom::tidy(lm(Intercept ~ Slope, data = .))) %>%
+  tidyr::unnest(lm) %>%
+  mutate(term = stringr::str_replace(term, stringr::regex("[:punct:]Intercept[:punct:]"), "Intercept")) %>%
+  mutate(term = stringr::str_replace(term, "Ci", "Slope")) %>%
+  select(!c(std.error, statistic, p.value)) %>% 
+  tidyr::pivot_wider(names_from = "term", values_from = "estimate") %>%
+  rename(Rd = Intercept) %>%
+  mutate(Cstar = -Slope)
+
+# Plot Summary Data
+slope_plot_data <- slope_data %>%
+  group_by(Day, Plant, PARi) %>%
+  summarise(across(.cols = c("Intercept", "Slope"), .fns = mean)) %>%
+  group_by(Day, PARi) %>%
+  summarise(across(.cols = c("Intercept", "Slope"),
+                   .fns = list(Mean = mean, SE = ~sd(.)/sqrt(length(n())))))
+
+filtered_slope_plot_data <- slope_plot_data %>%
+  filter(!PARi %in% c(400, 1500))
+
+# Plot
+slope_plot <- ggplot(slope_plot_data,
+                     aes(x = Slope_Mean, y = Intercept_Mean)) +
+  
+  # Error bars
+  geom_errorbar(aes(xmin = Slope_Mean-Slope_SE, xmax = Slope_Mean+Slope_SE),
+                linewidth = 0.25) +
+  geom_errorbar(aes(ymin = Intercept_Mean-Intercept_SE, ymax = Intercept_Mean+Intercept_SE),
+                linewidth = 0.25)  +
+  
+  # Regression line
+  geom_smooth(data = filtered_slope_plot_data,
+              method = "lm", se = FALSE, fullrange = TRUE,
+              linewidth = 0.25, color = "black") +
+  # Points
+  geom_point(aes(fill = as.factor(PARi)), shape = 21, size = 2.5) +
+  
+  
+  # Equation
+  ggpmisc::stat_poly_eq(data = filtered_slope_plot_data,
+                        ggpmisc::use_label(labels = c("eq", "rr")),
+                        formula = y ~ x, method = "lm",
+                        label.x = "right", label.y = "top") +
+  
+  scale_y_continuous(limits = c()) +
+  scale_fill_manual(values = c("black","grey20","grey40","grey70","white")) +
+  
+  # Labels updated to standard
+  xlab(bquote(Initial~slope~"("*mol~m^-2~s^-1*")")) +
+  ylab(bquote(italic(y)*"-intercept ("*µmol~m^-2~s^-1*")")) + 
+  facet_wrap(~ Day)
+
+slope_plot
+ggsave(here::here("figures/timeseries/timeseries_slope.pdf"), slope_plot, width = 6, height = 3, bg = "white", dpi = 500)
+
+```
+
+# Time series plot - Cstar
+
+```{r timeseries_cstar}
+cstar_ts <- readr::read_csv(here::here("data/timeseries/timeseries_cstars.csv")) %>%
+  mutate(Day = as.character(Day)) %>%
+  arrange(Plant, Day) # Sort by ID and Time for paired tests
+
+# 1. Test: Day 2 < Day 0 (Expect 0 > 2)
+cstar_test_0v2 <- cstar_ts %>%
+  filter(Day %in% c("0", "2")) %>%
+  rstatix::t_test(Cstar ~ Day, paired = TRUE, alternative = "greater") 
+
+# 2. Test: Day 4 > Day 2 (Expect 2 < 4)
+cstar_test_2v4 <- cstar_ts %>%
+  filter(Day %in% c("2", "4")) %>%
+  rstatix::t_test(Cstar ~ Day, paired = TRUE, alternative = "less")
+
+# 3. Test: Day 0 vs Day 4 (Recovery check, two-sided)
+cstar_test_0v4 <- cstar_ts %>%
+  filter(Day %in% c("0", "4")) %>%
+  rstatix::t_test(Cstar ~ Day, paired = TRUE, alternative = "two.sided")
+
+# Combine and prep for plotting
+cstar_stat <- bind_rows(cstar_test_0v2, cstar_test_2v4) %>%
+  rstatix::adjust_pvalue(method = "fdr") %>%
+  rstatix::add_significance() %>%
+  mutate(y.position = c(47.5, 45)) 
+
+cstar_means <- cstar_ts %>%
+  group_by(Day) %>%
+  summarise(across(.cols = Cstar,
+                   .fns = list(Mean = mean,
+                               SE = ~ sd(.)/sqrt(length(.)))))
+
+# Plot
+cstar_timeseries_plot <- ggplot(cstar_ts, aes(x = Day, y = Cstar)) +
+  
+  # High CO2 indicators (Grey Background)
+  # For discrete x-axis: 1=Day0, 2=Day2, 3=Day4.
+  annotate("rect", fill = "grey90",
+           xmin = 0.25, xmax = 1, # Covers Day 0
+           ymin = -Inf, ymax = Inf) +
+  annotate("rect", fill = "grey90",
+           xmin = 2, xmax = 3.75,  # Covers Day 4
+           ymin = -Inf, ymax = Inf) +
+  
+  # Individual Plant Trajectories
+  # geom_line(aes(group = Plant), 
+  #           linewidth = 0.25) + 
+  
+  geom_errorbar(aes(ymin = Cstar_Mean-Cstar_SE,
+                    ymax = Cstar_Mean+Cstar_SE,
+                    x = Day),
+                data = cstar_means,
+                inherit.aes = FALSE,
+                width = 0,
+                linewidth = 0.25) +
+  geom_point(aes(y = Cstar_Mean,
+                 x = Day),
+                data = cstar_means,
+                inherit.aes = FALSE) +
+  
+  
+  # P-values
+  ggpubr::stat_pvalue_manual(cstar_stat, 
+                             label = "p.adj.signif", 
+                             tip.length = 0.01,
+                             size = 5,
+                             bracket.size = 0.25) +
+  
+  # Labels & Scales
+  labs(x = expression("Day"),
+       y = expression(italic(C)[i]*"*"~"("*µmol~mol^-1*")")) +
+  
+  scale_fill_manual(values = c("white", "black", "white")) +
+    scale_shape_manual(values = c(21, 22, 21)) +
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, 10), expand = expansion(0,0))
+
+cstar_timeseries_plot
+# ggsave(here::here("figures/timeseries/timeseries_cstar.svg"), cstar_timeseries_plot, width = 3, height = 3, dpi = 500, bg = "white")
+ggsave(here::here("figures/timeseries/timeseries_cstar.png"), cstar_timeseries_plot, width = 3, height = 3, dpi = 500, bg = "white")
+```
+
+
+# Time series plot - gamma 1500
+
+```{r timeseries_gamma_highlight}
+gamma_hl_ts <- readr::read_csv(here::here("data/timeseries/timeseries_gammas.csv")) %>%
+  mutate(Day = as.character(Day)) %>%
+  arrange(Plant, Day) # Sort by ID and Time for paired tests
+
+# 1. Test: Day 2 < Day 0 (Expect 0 > 2)
+gamma_hl_test_0v2 <- gamma_hl_ts %>%
+  filter(Day %in% c("0", "2")) %>%
+  rstatix::t_test(Gamma ~ Day, paired = TRUE, alternative = "greater") 
+
+# 2. Test: Day 4 > Day 2 (Expect 2 < 4)
+gamma_hl_test_2v4 <- gamma_hl_ts %>%
+  filter(Day %in% c("2", "4")) %>%
+  rstatix::t_test(Gamma ~ Day, paired = TRUE, alternative = "less")
+
+# 3. Test: Day 0 vs Day 4 (Recovery check, two-sided)
+gamma_hl_test_0v4 <- gamma_hl_ts %>%
+  filter(Day %in% c("0", "4")) %>%
+  rstatix::t_test(Gamma ~ Day, paired = TRUE, alternative = "two.sided")
+
+# Combine and prep for plotting
+gamma_hl_stat <- bind_rows(gamma_hl_test_0v2, gamma_hl_test_2v4) %>%
+  rstatix::adjust_pvalue(method = "fdr") %>%
+  rstatix::add_significance() %>%
+  rstatix::add_significance(symbols = c("****", "***", "**", "*", "")) %>%
+  mutate(y.position = c(45, 42.5)) 
+
+gamma_hl_means <- gamma_hl_ts %>%
+  group_by(Day) %>%
+  summarise(across(.cols = c(Gamma, GammaLowLight),
+                   .fns = list(Mean = mean,
+                               SE = ~ sd(.)/sqrt(length(.)))))
+
+# Plot
+gamma_hl_plot <- ggplot(gamma_hl_ts, aes(x = Day, y = Gamma)) +
+  
+  # High CO2 indicators (Grey Background)
+  # For discrete x-axis: 1=Day0, 2=Day2, 3=Day4.
+  annotate("rect", fill = "grey90",
+           xmin = 0.25, xmax = 1, # Covers Day 0
+           ymin = -Inf, ymax = Inf) +
+  annotate("rect", fill = "grey90",
+           xmin = 2, xmax = 3.75,  # Covers Day 4
+           ymin = -Inf, ymax = Inf) +
+  
+  # Individual Plant Trajectories
+  # geom_line(aes(group = Plant), 
+  #           linewidth = 0.25) + 
+  
+  geom_errorbar(aes(ymin = Gamma_Mean-Gamma_SE,
+                    ymax = Gamma_Mean+Gamma_SE,
+                    x = Day),
+                data = gamma_hl_means,
+                inherit.aes = FALSE,
+                width = 0,
+                linewidth = 0.25) +
+  geom_point(aes(y = Gamma_Mean,
+                 x = Day),
+                data = gamma_hl_means,
+                inherit.aes = FALSE) +
+  
+  
+  # P-values
+  # ggpubr::stat_pvalue_manual(gamma_hl_stat, 
+  #                            label = "p.adj.signif", 
+  #                            tip.length = 0.01,
+  #                            size = 5,
+  #                            bracket.size = 0.25) +
+  
+  # Labels & Scales
+  labs(x = expression("Day"),
+       y = expression(italic(Γ)~"("*µmol~mol^-1*")")) +
+  
+  scale_fill_manual(values = c("white", "black", "white")) +
+    scale_shape_manual(values = c(21, 22, 21)) +
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, 10), expand = expansion(0,0))
+
+gamma_hl_plot
+# ggsave(here::here("figures/timeseries/timeseries_cstar.svg"), cstar_timeseries_plot, width = 3, height = 3, dpi = 500, bg = "white")
+ggsave(here::here("figures/timeseries/timeseries_gamma.png"), gamma_hl_plot, width = 3, height = 3, dpi = 500, bg = "white")
+```
+
+
+# Time series plot - gamma 250 (low light)
+
+```{r timeseries_gamma_lowlight}
+gamma_ll_ts <- readr::read_csv(here::here("data/timeseries/timeseries_gammas.csv")) %>%
+  mutate(Day = as.character(Day)) %>%
+  arrange(Plant, Day) # Sort by ID and Time for paired tests
+
+# 1. Test: Day 2 < Day 0 (Expect 0 > 2)
+gamma_ll_test_0v2 <- gamma_ll_ts %>%
+  filter(Day %in% c("0", "2")) %>%
+  rstatix::t_test(GammaLowLight ~ Day, paired = TRUE, alternative = "greater") 
+
+# 2. Test: Day 4 > Day 2 (Expect 2 < 4)
+gamma_ll_test_2v4 <- gamma_ll_ts %>%
+  filter(Day %in% c("2", "4")) %>%
+  rstatix::t_test(GammaLowLight ~ Day, paired = TRUE, alternative = "less")
+
+# 3. Test: Day 0 vs Day 4 (Recovery check, two-sided)
+gamma_ll_test_0v4 <- gamma_ll_ts %>%
+  filter(Day %in% c("0", "4")) %>%
+  rstatix::t_test(GammaLowLight ~ Day, paired = TRUE, alternative = "two.sided")
+
+# Combine and prep for plotting
+gamma_ll_stat <- bind_rows(gamma_ll_test_0v2, gamma_ll_test_2v4) %>%
+  bind_rows(gamma_ll_test_0v4) %>%
+  rstatix::adjust_pvalue(method = "fdr") %>%
+  rstatix::add_significance() %>%
+  mutate(y.position = c(89, 75, 95)) 
+
+gamma_ll_means <- gamma_ll_ts %>%
+  group_by(Day) %>%
+  summarise(across(.cols = c(Gamma, GammaLowLight),
+                   .fns = list(Mean = mean,
+                               SE = ~ sd(.)/sqrt(length(.)))))
+
+# Plot
+gamma_ll_plot <- ggplot(gamma_ll_ts, aes(x = Day, y = GammaLowLight)) +
+  
+  # High CO2 indicators (Grey Background)
+  # For discrete x-axis: 1=Day0, 2=Day2, 3=Day4.
+  annotate("rect", fill = "grey90",
+           xmin = 0.25, xmax = 1, # Covers Day 0
+           ymin = -Inf, ymax = Inf) +
+  annotate("rect", fill = "grey90",
+           xmin = 2, xmax = 3.75,  # Covers Day 4
+           ymin = -Inf, ymax = Inf) +
+  
+  # Individual Plant Trajectories
+  # geom_line(aes(group = Plant), 
+  #           linewidth = 0.25) + 
+  
+  geom_errorbar(aes(ymin = GammaLowLight_Mean-GammaLowLight_SE,
+                    ymax = GammaLowLight_Mean+GammaLowLight_SE,
+                    x = Day),
+                data = gamma_ll_means,
+                inherit.aes = FALSE,
+                width = 0,
+                linewidth = 0.25) +
+  geom_point(aes(y = GammaLowLight_Mean,
+                 x = Day),
+                data = gamma_ll_means,
+                inherit.aes = FALSE) +
+  
+  
+  # P-values
+  ggpubr::stat_pvalue_manual(gamma_ll_stat, 
+                             label = "p.adj.signif", 
+                             tip.length = 0.01,
+                             size = 5,
+                             bracket.size = 0.25) +
+  
+  # Labels & Scales
+  labs(x = expression("Day"),
+       y = expression(italic(Γ)[250]~"("*µmol~mol^-1*")")) +
+  
+  scale_fill_manual(values = c("white", "black", "white")) +
+    scale_shape_manual(values = c(21, 22, 21)) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20), expand = expansion(0,0))
+
+gamma_ll_plot
+# ggsave(here::here("figures/timeseries/timeseries_cstar.svg"), cstar_timeseries_plot, width = 3, height = 3, dpi = 500, bg = "white")
+ggsave(here::here("figures/timeseries/timeseries_gamma_lowlight.png"), gamma_ll_plot, width = 3, height = 3, dpi = 500, bg = "white")
+```
+
+# Combine panels
+
+```{r}
+
+# Growth CO2 labels above the panel, centred on grey bands (800) and gap (200).
+STRIP_TEXT_PT <- 14 * 0.8
+add_co2_band_labels <- function(p, size = STRIP_TEXT_PT / .pt, inside = FALSE) {
+  vj <- if (inside) 1.3 else -0.4
+  p +
+    annotate("text", x = c(0.625, 1.5, 2.875), y = Inf,
+             label = c("800", "200", "800"),
+             size = size, colour = "black", hjust = 0.5, vjust = vj) +
+    coord_cartesian(clip = "off") +
+    theme(plot.margin = margin(t = if (inside) 5.5 else 16, r = 5.5, b = 5.5, l = 5.5))
+}
+
+reversibility_plot <- cowplot::plot_grid(
+  add_co2_band_labels(gamma_hl_plot),
+  add_co2_band_labels(cstar_timeseries_plot),
+  add_co2_band_labels(gamma_ll_plot),
+  labels = c("(a)", "(b)", "(c)"),
+  hjust = 0,
+  label_size = 16,
+  ncol = 3
+)
+
+
+ggsave(here::here("figures/figure5.jpg"), reversibility_plot, width = 6, height = 3, dpi = 500, bg = "white")
+
+
+```
+
+
+# Combine panels
+```{r}
+# --- Top row: A/Ci ---
+# Tag labels for each facet panel
+aci_tags <- data.frame(
+  Day = factor(c("Day 0", "Day 2", "Day 4")),
+  label = c("(a)", "(b)", "(c)")
+)
+
+aci_panel <- cstar_aci_plot +
+  # theme(legend.position = "none") +
+  geom_text(data = aci_tags,
+            aes(x = 2, y = 5.5, label = label),
+            inherit.aes = FALSE,
+            size = 16 / .pt, fontface = "bold", hjust = 0)
+
+# --- Bottom row: timeseries ---
+# Band labels: black, left-aligned, matching axis text size
+gamma_d <- add_co2_band_labels(gamma_hl_plot) #+
+  # annotate("text", x = 0.4, y = 57, label = "800", size = 3.5, colour = "black", hjust = 0) +
+  # annotate("text", x = 1.1, y = 57, label = "200", size = 3.5, colour = "black", hjust = 0) +
+  # annotate("text", x = 2.1, y = 57, label = "800", size = 3.5, colour = "black", hjust = 0) +
+  # theme(axis.title.x = element_blank())
+
+cstar_e <- add_co2_band_labels(cstar_timeseries_plot) #+
+  # annotate("text", x = 0.4, y = 57, label = "800", size = 3, colour = "black", hjust = 0) +
+  # annotate("text", x = 1.1, y = 57, label = "200", size = 3, colour = "black", hjust = 0) +
+  # annotate("text", x = 2.1, y = 57, label = "800", size = 3, colour = "black", hjust = 0) +
+  # labs(x = expression("Days after transfer to 200"~µmol~mol^-1~"growth"~CO[2]))
+
+gamma_ll_f <- add_co2_band_labels(gamma_ll_plot) #+
+  # annotate("text", x = 0.4, y = 95, label = "800", size = 3, colour = "black", hjust = 0) +
+  # annotate("text", x = 1.1, y = 95, label = "200", size = 3, colour = "black", hjust = 0) +
+  # annotate("text", x = 2.1, y = 95, label = "800", size = 3, colour = "black", hjust = 0) +
+  # theme(axis.title.x = element_blank())
+
+# --- Assemble ---
+bottom_row <- cowplot::plot_grid(
+  gamma_d, cstar_e, gamma_ll_f,
+  labels = c("(d)", "(e)", "(f)"),
+  hjust = 0,
+  label_size = 16,
+  ncol = 3,
+  align = "h", axis = "tb"
+)
+
+reversibility_plot <- cowplot::plot_grid(
+  aci_panel,
+  bottom_row,
+  hjust = 0,
+  label_size = 16,
+  ncol = 1,
+  rel_heights = c(1, 0.85)
+)
+
+ggsave(here::here("figures/figure5.svg"), reversibility_plot,
+       width = 8, height = 6, bg = "white")
+```

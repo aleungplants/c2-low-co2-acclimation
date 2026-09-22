@@ -1,0 +1,83 @@
+# R
+.Rhistory
+.RData
+.Rproj.user/
+.Ruserdata
+*.Rproj
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*~
+*.bak
+*.tmp
+*.swp
+
+# ── Regenerable outputs ─────────────────────────────────────
+# Figures: ignore by content (not directory-level) so negation for TEMs works
+CO2 study analysis/figures/**
+CO2 study analysis/tables/
+CO2 study analysis/*.html
+
+# ── Keep: TEM micrographs (high-res source images) ──────────
+!CO2 study analysis/figures/TEMs_*.jpg
+!CO2 study analysis/figures/TEMs_*.png
+
+# ── Raw and processed data ──────────────────────────────────
+# Exclude by file type so code files (R, Rmd) inside data/ pass through.
+CO2 study analysis/data/**/*.xlsx
+CO2 study analysis/data/**/*.csv
+CO2 study analysis/data/**/*.CSV
+CO2 study analysis/data/**/*.WAV
+CO2 study analysis/data/**/*.jpg
+CO2 study analysis/data/**/*.png
+CO2 study analysis/data/**/Tests/
+CO2 study analysis/data/**/exclude/
+CO2 study analysis/data/fan_et_al/
+
+# ── Keep: processed gas exchange data ────────────────────────
+!CO2 study analysis/data/gas_ex/merged_*.csv
+!CO2 study analysis/data/timeseries/merged_*.csv
+!CO2 study analysis/data/timeseries/timeseries_*.csv
+
+# ── Keep: processed data directory (intermediate tables, PCA, PGLS, etc.)
+!CO2 study analysis/data/processed_data/*.csv
+!CO2 study analysis/data/processed_data/*.xlsx
+
+# ── Keep: enzyme metadata spreadsheets (read by the Rmd) ────
+!CO2 study analysis/data/enzyme/EnzymeLeafAreas.xlsx
+!CO2 study analysis/data/enzyme/Leaf freezing merged.xlsx
+
+# ── Keep: photosynthetic types lookup (read at Rmd line 23) ─
+!CO2 study analysis/data/photosynthetic_types.xlsx
+
+# ── Keep: raw anatomy / ultrastructure / immuno spreadsheets ─
+!CO2 study analysis/data/anatomy/archive/*.xlsx
+
+# ── Archived old anatomy Rmd (not called by any analysis) ───
+CO2 study analysis/data/anatomy/archive/co2_anatomy_old.Rmd
+
+# Archived/superseded phylogenies (current version kept)
+CO2 study analysis/data/co2_species_tree old.tre
+CO2 study analysis/data/co2_species_tree_c4 old.tre
+# C4 tree: produced by make_tree.R but not read by any analysis
+CO2 study analysis/data/co2_species_tree_c4.tre
+
+# Standalone identifiability check (eval=FALSE chunk in the main Rmd)
+CO2 study analysis/bs_fit_gamma_chunk.qmd
+
+# Species lists (input to make_tree.R; archive with raw data)
+CO2 study analysis/species_list*.xlsx
+
+# Unused old model-fit file (not read by the Rmd)
+CO2 study analysis/fit_results_species_bayesian_mean_inputs_all_old.csv

@@ -1,0 +1,5 @@
+Model,AIC,deltaAIC
+PGLS_Linear,-Inf,NA
+PGLS_Quadratic,-Inf,NA
+LME_Linear,152.90137792095817,Inf
+LME_Quadratic,154.092445261342,Inf

@@ -1,0 +1,6 @@
+"Term","label","F_value","p_value","line_idx","model","model_details"
+"Gly_Shuttle_Rate","Gly Shuttle Rate~'***'",62.9718885163135,0.000212809263195002,0,"LME_Quadratic","Non-phylogenetic LME"
+"Gly_Shuttle_Rate²","Gly Shuttle Rate²~'***'",39.5628750078966,0.000751933176905917,1,"LME_Quadratic","Non-phylogenetic LME"
+"CO2","italic(C)[growth]~'**'",23.6937185297372,0.0028011251305482,2,"LME_Quadratic","Non-phylogenetic LME"
+"Gly_Shuttle_Rate:CO2","Gly Shuttle:italic(C)[growth]~'***'",143.016000859629,2.07144789312608e-05,3,"LME_Quadratic","Non-phylogenetic LME"
+"Gly_Shuttle_Rate²:CO2","Gly Shuttle²:italic(C)[growth]~'***'",58.9814140765273,0.000255022929532167,4,"LME_Quadratic","Non-phylogenetic LME"

@@ -1,0 +1,6 @@
+"Term","label","F_value","p_value","line_idx","model","model_details"
+"Gly_Shuttle_Rate","Gly Shuttle Rate~'***'",63.8718367663206,0.00020459916349358,0,"PLME_BM_Quadratic","Brownian Motion"
+"Gly_Shuttle_Rate²","Gly Shuttle Rate²~'***'",39.4256682959467,0.000758894443111169,1,"PLME_BM_Quadratic","Brownian Motion"
+"CO2","italic(C)[growth]~'**'",23.0576699243044,0.00299510451413931,2,"PLME_BM_Quadratic","Brownian Motion"
+"Gly_Shuttle_Rate:CO2","Gly Shuttle:italic(C)[growth]~'***'",142.850178475621,2.07841468837788e-05,3,"PLME_BM_Quadratic","Brownian Motion"
+"Gly_Shuttle_Rate²:CO2","Gly Shuttle²:italic(C)[growth]~'***'",58.8345302890801,0.000256781948853702,4,"PLME_BM_Quadratic","Brownian Motion"
